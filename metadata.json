@@ -1,0 +1,5 @@
+{
+  "name": "Invoice Analyzer AI",
+  "description": "An intelligent application to upload invoices (simulated parsing), extract data, download as CSV, and gain insights using Google's Gemini API.",
+  "requestFramePermissions": []
+}
