@@ -27,6 +27,7 @@ export interface RawInvoiceSummaryFromGemini {
   date?: string; // Optional because Gemini might not find it
   invoiceNumber?: string;
   partyName?: string;
+  panOrVatNumber?: string; // New field for Seller's PAN/VAT
   particulars?: string;   // Added for extracted particulars
   taxableAmount?: number; // Expecting a number
   vatAmount?: number;     // Expecting a number
@@ -126,7 +127,8 @@ export const generateInvoiceInsights = async (
     date: item.date,
     invoice_number: item.invoiceNumber,
     party: item.partyName,
-    particulars: item.particulars, // Added particulars
+    pan_or_vat_number: item.panOrVatNumber, // Added PAN/VAT
+    particulars: item.particulars, 
     taxable_amount: item.taxableAmount, 
     vat_amount: item.vatAmount,         
     total_invoice_amount: item.totalAmount, 
@@ -134,7 +136,7 @@ export const generateInvoiceInsights = async (
 
   const fullPrompt = `
 System: You are a helpful financial assistant. Analyze the provided INVOICE SUMMARIES based on the user's request.
-Each item in the data represents a summary for a single invoice, including its date, invoice number, party name, particulars (description of goods/services), taxable amount, VAT amount, and total amount.
+Each item in the data represents a summary for a single invoice, including its date, invoice number, party name, seller's PAN/VAT number (pan_or_vat_number), particulars (description of goods/services), taxable amount, VAT amount, and total amount.
 Provide clear, concise, and actionable insights. Format your response in markdown.
 
 User Request: "${userPrompt}"

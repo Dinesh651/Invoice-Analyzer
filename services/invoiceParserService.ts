@@ -20,7 +20,7 @@ const fileToGenerativePart = async (file: File): Promise<{inlineData: {mimeType:
 // Updated function to extract data from an actual invoice file (image or PDF) using Gemini
 export const extractActualInvoiceData = async (file: File): Promise<ParsedInvoice> => {
   if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
-    throw new Error('Invalid file type. Please upload an image (PNG, JPG, JPEG) or a PDF document.');
+    throw new Error('Invalid file type. Please upload an image (PNG, JPG, JPEG, WEBP) or a PDF document.');
   }
   if (file.size > 5 * 1024 * 1024) { // Max 5MB
     throw new Error("File size exceeds 5MB limit.");
@@ -30,25 +30,30 @@ export const extractActualInvoiceData = async (file: File): Promise<ParsedInvoic
     const filePart = await fileToGenerativePart(file);
     
     const extractionPrompt = `
-You are an expert invoice data extraction tool. The provided PDF document might contain scans of MULTIPLE distinct invoices on different pages or sections.
-For EACH distinct invoice you identify within the document, extract ONLY the following details:
+You are an expert invoice data extraction tool. The input is a single document file (which could be a PDF, potentially multi-page, or an image file like JPEG, PNG, WEBP).
+- If the document is a multi-page PDF, it might contain MULTIPLE distinct invoices on different pages or sections.
+- If the document is an image file or a single-page PDF, it will likely represent a SINGLE invoice.
+
+For EACH distinct invoice you identify within the provided document, extract ONLY the following details:
 - date (string, the main invoice date, format YYYY-MM-DD if possible, otherwise as it appears on the invoice)
 - invoiceNumber (string, the primary invoice number or identifier)
-- partyName (string, the name of the vendor, supplier, or main client on the invoice)
+- partyName (string, the name of the vendor, supplier, or main client on the invoice - THE SELLER/ISSUER)
+- panOrVatNumber (string, the PAN (Permanent Account Number) or VAT registration number of the SELLER/INVOICE ISSUER. This is usually printed. IGNORE any handwritten PAN/VAT numbers, as those likely belong to the buyer/receiver. If not found, use "N/A".)
 - particulars (string, a brief description of the main goods or services listed on this specific invoice. If multiple line items, provide a concise summary or the most significant item. Example: "Software Development Services" or "Office Supplies Purchase")
 - taxableAmount (number, the total taxable amount before VAT or other taxes. THIS MUST BE A PLAIN NUMBER WITHOUT ANY CURRENCY SYMBOLS, COMMAS, OR TEXT. Example: 1100.00)
 - vatAmount (number, the total VAT amount. THIS MUST BE A PLAIN NUMBER. Example: 134.50)
 - totalAmount (number, the grand total amount of that specific invoice (taxableAmount + vatAmount + other charges if any). THIS MUST BE A PLAIN NUMBER. Example: 1234.56)
 
-If a piece of information (like taxableAmount or vatAmount) is not clearly available for a specific invoice, use 0 for that numeric field within that invoice's object. For strings like date, invoiceNumber, partyName, or particulars, use "N/A" if not found.
+If a piece of information (like taxableAmount or vatAmount) is not clearly available for a specific invoice, use 0 for that numeric field within that invoice's object. For strings like date, invoiceNumber, partyName, panOrVatNumber, or particulars, use "N/A" if not found.
 Return ALL extracted invoices as a single JSON ARRAY. Each element in the array should be a JSON OBJECT representing one distinct invoice.
 
-Example of desired JSON output structure if TWO invoices are found in the document:
+Example of desired JSON output structure if TWO invoices are found in a multi-page PDF:
 [
   {
     "date": "2024-07-20",
     "invoiceNumber": "INV-XYZ-001",
     "partyName": "Example Vendor Inc.",
+    "panOrVatNumber": "ABCDE1234F",
     "particulars": "Cloud Hosting Services Q3",
     "taxableAmount": 1400.00,
     "vatAmount": 175.50,
@@ -58,13 +63,14 @@ Example of desired JSON output structure if TWO invoices are found in the docume
     "date": "2024-07-22",
     "invoiceNumber": "INV-ABC-002",
     "partyName": "Another Supplier LLC",
+    "panOrVatNumber": "VATIN98765",
     "particulars": "Annual Software Subscription",
     "taxableAmount": 750.00,
     "vatAmount": 100.00,
     "totalAmount": 850.00
   }
 ]
-If only one invoice is found, the array will contain a single object. If no invoices are found, return an empty array [].
+If only one invoice is found (e.g., in an image or single-page PDF), the array will contain a single object. If no invoices are found, return an empty array [].
 Do NOT include any introductory text, explanations, or apologies in your response. Ensure the output is ONLY the JSON array of invoice objects.
 `;
 
@@ -87,7 +93,7 @@ Do NOT include any introductory text, explanations, or apologies in your respons
     
     const invoiceItems: InvoiceItem[] = extractedDataArray.map((rawSummary, index) => {
       // Basic validation for each summary item from Gemini
-      if (typeof rawSummary.totalAmount === 'undefined' && typeof rawSummary.partyName === 'undefined' && typeof rawSummary.invoiceNumber === 'undefined' && typeof rawSummary.date === 'undefined') {
+      if (typeof rawSummary.totalAmount === 'undefined' && typeof rawSummary.partyName === 'undefined' && typeof rawSummary.invoiceNumber === 'undefined' && typeof rawSummary.date === 'undefined' && typeof rawSummary.panOrVatNumber === 'undefined') {
           console.warn(`Invoice summary at index ${index} from file ${file.name} is empty or malformed. Skipping.`);
       }
       return {
@@ -95,13 +101,14 @@ Do NOT include any introductory text, explanations, or apologies in your respons
         date: String(rawSummary.date || 'N/A'),
         invoiceNumber: String(rawSummary.invoiceNumber || 'N/A'),
         partyName: String(rawSummary.partyName || 'N/A'),
+        panOrVatNumber: String(rawSummary.panOrVatNumber || 'N/A'), // Added PAN/VAT
         particulars: String(rawSummary.particulars || 'N/A'), 
         taxableAmount: Number(rawSummary.taxableAmount || 0), 
         vatAmount: Number(rawSummary.vatAmount || 0),     
         totalAmount: Number(rawSummary.totalAmount || 0), 
         sourceFileName: file.name,
       };
-    }).filter(item => !(item.date === 'N/A' && item.invoiceNumber === 'N/A' && item.partyName === 'N/A' && item.particulars === 'N/A' && item.totalAmount === 0 && item.taxableAmount === 0 && item.vatAmount === 0)); // Filter out completely empty items
+    }).filter(item => !(item.date === 'N/A' && item.invoiceNumber === 'N/A' && item.partyName === 'N/A' && item.panOrVatNumber === 'N/A' && item.particulars === 'N/A' && item.totalAmount === 0 && item.taxableAmount === 0 && item.vatAmount === 0)); // Filter out completely empty items
 
     return {
       fileName: file.name,
@@ -120,7 +127,7 @@ Do NOT include any introductory text, explanations, or apologies in your respons
 
 // --- Original Mock Invoice Parser (Kept for reference or fallback) ---
 const generateMockInvoiceItems = (fileName: string): InvoiceItem[] => {
-  const baseDetails: Omit<InvoiceItem, 'id' | 'invoiceNumber' | 'partyName' | 'taxableAmount' | 'vatAmount' | 'totalAmount' | 'particulars'>[] = [
+  const baseDetails: Omit<InvoiceItem, 'id' | 'invoiceNumber' | 'partyName' | 'panOrVatNumber' | 'taxableAmount' | 'vatAmount' | 'totalAmount' | 'particulars'>[] = [
     { date: '2024-07-10'},
     { date: '2024-07-12'},
   ];
@@ -148,6 +155,7 @@ const generateMockInvoiceItems = (fileName: string): InvoiceItem[] => {
       id: `${fileName}-${Math.random().toString(36).substring(7)}-summary`,
       invoiceNumber: `INV-${invNumSuffix}`,
       partyName: partyNames[partyIndex],
+      panOrVatNumber: `MOCKPAN${invNumSuffix}`, // Mock PAN/VAT
       taxableAmount: parseFloat(taxableAmount.toFixed(2)),
       vatAmount: parseFloat(vatAmount.toFixed(2)),
       totalAmount: parseFloat(totalAmount.toFixed(2)),
