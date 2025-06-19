@@ -29,16 +29,16 @@ const formatCsvCell = (value: any): string => {
 export const exportToCsv = (filename: string, rows: InvoiceItem[]): void => {
   if (!rows || rows.length === 0) {
     console.warn("No data to export.");
+    // Optionally, alert the user or provide UI feedback
+    // alert("No data available to export.");
     return;
   }
 
-  // Define the exact order of keys from InvoiceItem to be exported.
-  // These keys will also be used as the header titles.
   const orderedKeys: ReadonlyArray<keyof Omit<InvoiceItem, 'id'>> = [
     'date', 
     'invoiceNumber', 
     'partyName', 
-    'panOrVatNumber', // Added PAN/VAT
+    'panOrVatNumber',
     'particulars', 
     'taxableAmount', 
     'vatAmount', 
@@ -47,27 +47,17 @@ export const exportToCsv = (filename: string, rows: InvoiceItem[]): void => {
     'vatCredit'
   ];
 
-  // Create the header row string by formatting each key name.
   const headerString = orderedKeys.map(key => formatCsvCell(key)).join(',');
-
   let csvContent = headerString + '\r\n';
   
   for (const row of rows) {
     const line = orderedKeys.map(key => {
       let valueToFormat: any;
-      
-      // Access the value from the row object based on the key.
-      // Handle potentially undefined optional fields gracefully.
       if (key === 'sourceFileName') {
-        // Use nullish coalescing to default to an empty string if undefined/null.
         valueToFormat = row.sourceFileName ?? ''; 
       } else if (key === 'vatCredit') {
-        // Ensure boolean for consistent TRUE/FALSE output, default to false if undefined/null.
         valueToFormat = typeof row.vatCredit === 'boolean' ? row.vatCredit : false;
       } else {
-        // For other keys (date, invoiceNumber, etc.), which are expected to be present
-        // as string or number based on InvoiceItem type (after Omit<'id'>).
-        // If a field could be legitimately null/undefined from parsing, it will be handled by formatCsvCell.
         valueToFormat = row[key as Exclude<typeof key, 'sourceFileName' | 'vatCredit'>];
       }
       return formatCsvCell(valueToFormat);
@@ -77,16 +67,30 @@ export const exportToCsv = (filename: string, rows: InvoiceItem[]): void => {
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');
-  if (link.download !== undefined) { // Feature detection
+
+  if (link.download !== undefined) { // Check if the download attribute is supported
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
     link.setAttribute('download', filename);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    try {
+      link.click(); // This is the step that might fail in some webviews
+      console.log(`Attempting to download '${filename}'. If the download does not start, especially in a webview environment, the webview might have restrictions. A native file download integration (Python-to-JavaScript bridge) might be required.`);
+    } catch (e) {
+      console.error("Error during CSV export click:", e);
+      alert(`CSV export failed: ${(e as Error).message}. This can happen due to browser/webview security restrictions. For webview environments, a native file download bridge is often necessary.`);
+    } finally {
+      // Ensure cleanup even if click fails
+      if (document.body.contains(link)) {
+        document.body.removeChild(link);
+      }
+      URL.revokeObjectURL(url);
+    }
   } else {
-    alert("CSV export is not supported in this browser.");
+    // This branch is for browsers/webviews that don't support `a.download` at all
+    alert("CSV export is not directly supported in this environment. This could be an older browser or a restricted webview. For webview applications, please ensure a native file download bridge (e.g., from JavaScript to Python) is implemented to handle file saving.");
+    // As a fallback for debugging or if the user *really* needs the data:
+    // console.log("CSV Content for manual copy:\n", csvContent);
   }
 };
