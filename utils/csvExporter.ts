@@ -1,4 +1,3 @@
-
 import { InvoiceItem } from '../types';
 
 // Helper function to convert any value to a string suitable for CSV cell
@@ -58,14 +57,48 @@ export const exportToCsv = (filename: string, rows: InvoiceItem[]): void => {
       } else if (key === 'vatCredit') {
         valueToFormat = typeof row.vatCredit === 'boolean' ? row.vatCredit : false;
       } else {
-        valueToFormat = row[key as Exclude<typeof key, 'sourceFileName' | 'vatCredit'>];
+        // Simplified access: TypeScript's control flow analysis understands that
+        // 'key' here refers to the remaining direct properties of InvoiceItem.
+        valueToFormat = row[key]; 
       }
       return formatCsvCell(valueToFormat);
     }).join(',');
     csvContent += line + '\r\n';
   }
 
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const mimeType = 'text/csv;charset=utf-8'; // Removed trailing semicolon
+
+  // Check if running in pywebview and if the API bridge exists
+  // @ts-ignore - pywebview is injected by the Python host
+  if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.save_file === 'function') {
+    console.log(`pywebview environment detected. Attempting to download via Python bridge: ${filename}`);
+    // @ts-ignore - pywebview is injected by the Python host
+    window.pywebview.api.save_file(filename, csvContent, mimeType)
+      .then((result: { success: boolean; error?: string; path?: string }) => {
+        if (result && result.success) {
+          console.log(`CSV data successfully sent to Python for saving: ${filename} at ${result.path || ''}`);
+          // You could add a UI notification here if desired
+          // alert(`File saved successfully: ${result.path || filename}`);
+        } else {
+          console.error(`Python save_file reported an issue: ${result?.error || 'Unknown error'}`);
+          alert(`Could not save file via Python: ${result?.error || 'Ensure the Python backend is configured for downloads.'}`);
+        }
+      })
+      .catch((error: any) => {
+        console.error("Error calling pywebview.api.save_file:", error);
+        alert("Error communicating with Python for file download. The pywebview bridge might not be set up correctly. Falling back to browser download if possible.");
+        // Fallback to standard browser download on catastrophic bridge failure
+        triggerStandardBrowserDownload(filename, csvContent, mimeType);
+      });
+  } else {
+    // Standard browser download logic
+    console.log("Not in pywebview or save_file API not found. Using standard browser download.");
+    triggerStandardBrowserDownload(filename, csvContent, mimeType);
+  }
+};
+
+const triggerStandardBrowserDownload = (filename: string, csvContent: string, mimeType: string): void => {
+  const blob = new Blob([csvContent], { type: mimeType });
   const link = document.createElement('a');
 
   if (link.download !== undefined) { // Check if the download attribute is supported
@@ -75,22 +108,19 @@ export const exportToCsv = (filename: string, rows: InvoiceItem[]): void => {
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     try {
-      link.click(); // This is the step that might fail in some webviews
-      console.log(`Attempting to download '${filename}'. If the download does not start, especially in a webview environment, the webview might have restrictions. A native file download integration (Python-to-JavaScript bridge) might be required.`);
+      link.click();
+      console.log(`Attempting standard browser download for '${filename}'.`);
     } catch (e) {
-      console.error("Error during CSV export click:", e);
-      alert(`CSV export failed: ${(e as Error).message}. This can happen due to browser/webview security restrictions. For webview environments, a native file download bridge is often necessary.`);
+      console.error("Error during standard CSV export click:", e);
+      alert(`CSV export failed: ${(e as Error).message}. This can happen due to browser security restrictions.`);
     } finally {
-      // Ensure cleanup even if click fails
       if (document.body.contains(link)) {
         document.body.removeChild(link);
       }
       URL.revokeObjectURL(url);
     }
   } else {
-    // This branch is for browsers/webviews that don't support `a.download` at all
-    alert("CSV export is not directly supported in this environment. This could be an older browser or a restricted webview. For webview applications, please ensure a native file download bridge (e.g., from JavaScript to Python) is implemented to handle file saving.");
-    // As a fallback for debugging or if the user *really* needs the data:
-    // console.log("CSV Content for manual copy:\n", csvContent);
+    alert("CSV export is not directly supported in this browser environment. For webview applications without a Python bridge, this feature may not work.");
+    console.warn("Download attribute not supported on <a> tag. CSV Content for manual copy:\n", csvContent);
   }
 };
