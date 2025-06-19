@@ -1,5 +1,7 @@
+
 {
-  "name": "Invoice Analyzer AI",
+  "name": "TaxEase Invoice Analyzer",
   "description": "An intelligent application to upload invoices (simulated parsing), extract data, download as CSV, and gain insights using Google's Gemini API.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "prompt": ""
 }

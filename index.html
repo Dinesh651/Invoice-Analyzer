@@ -1,9 +1,10 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Invoice Analyzer AI</title>
+  <title>TaxEase Invoice Analyzer</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     /* For custom scrollbars if needed, though Tailwind provides utilities */
@@ -21,6 +22,20 @@
       background: #555;
     }
   </style>
+<script>
+  // WARNING: THIS IS FOR DEMONSTRATION PURPOSES ONLY IN THIS PLAYGROUND.
+  // In a real application, API keys should be managed via secure environment variables
+  // and not exposed in client-side code.
+  // The user provided AIzaSyDtc7m081uSEt_LlNuRVw2CQvoRh6fTNX8 as the API key.
+  // The application expects process.env.API_KEY.
+  if (typeof process === 'undefined') {
+    window.process = {};
+  }
+  if (typeof process.env === 'undefined') {
+    window.process.env = {};
+  }
+  window.process.env.API_KEY = "AIzaSyDtc7m081uSEt_LlNuRVw2CQvoRh6fTNX8";
+</script>
 <script type="importmap">
 {
   "imports": {
@@ -31,6 +46,7 @@
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
 <body class="bg-slate-100">
   <div id="root"></div>

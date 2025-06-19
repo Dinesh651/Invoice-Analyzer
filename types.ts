@@ -4,11 +4,13 @@ export interface InvoiceItem {
   date: string;
   invoiceNumber: string;
   partyName: string;
+  panOrVatNumber: string; // New field for Seller's PAN/VAT
   particulars: string; // Extracted description of goods/services, or "N/A"
   taxableAmount: number; // Extracted taxable amount, plain number
   vatAmount: number;     // Extracted VAT amount, plain number
   totalAmount: number;   // The grand total of the invoice, plain number
   sourceFileName?: string;
+  vatCredit?: boolean; // Added for VAT credit tracking
 }
 
 export interface ParsedInvoice {
