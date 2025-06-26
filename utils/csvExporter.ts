@@ -1,4 +1,3 @@
-
 import { InvoiceItem } from '../types';
 
 // Define more specific types for File System Access API if needed,
@@ -34,8 +33,8 @@ declare global {
   }
 
   interface FileSystemWritableFileStream extends WritableStream {
-    write: (data: FileSystemWriteChunkType) => Promise<void>; 
-    close: () => Promise<void>;
+    write: (data: FileSystemWriteChunkType) => Promise<void>;
+    // close: () => Promise<void>; // Removed: close() is inherited from WritableStream
     // abort?: (reason?: any) => Promise<void>;
     // seek?: (position: number) => Promise<void>;
     // truncate?: (size: number) => Promise<void>;
@@ -98,7 +97,9 @@ const triggerStandardLegacyDownload = (filename: string, csvContent: string, mim
 };
 
 // Attempts to save using File System Access API, then falls back to legacy <a> tag download
+// This function aims to provide a "Save As" dialog experience where possible.
 const attemptSaveWithDialogs = async (filename: string, csvContent: string, mimeType: string): Promise<void> => {
+  // Try modern File System Access API first for a native "Save As" dialog
   if (typeof window.showSaveFilePicker === 'function') {
     try {
       const handle = await window.showSaveFilePicker({
@@ -140,30 +141,30 @@ export const exportToCsv = (filename: string, rows: InvoiceItem[]): void => {
   }
 
   const orderedKeys: ReadonlyArray<keyof Omit<InvoiceItem, 'id'>> = [
-    'date', 
-    'invoiceNumber', 
-    'partyName', 
+    'date',
+    'invoiceNumber',
+    'partyName',
     'panOrVatNumber',
-    'particulars', 
-    'taxableAmount', 
-    'vatAmount', 
-    'totalAmount', 
+    'particulars',
+    'taxableAmount',
+    'vatAmount',
+    'totalAmount',
     'sourceFileName',
     'vatCredit'
   ];
 
   const headerString = orderedKeys.map(key => formatCsvCell(key)).join(',');
   let csvContent = headerString + '\r\n';
-  
+
   for (const row of rows) {
     const line = orderedKeys.map(key => {
       let valueToFormat: any;
       if (key === 'sourceFileName') {
-        valueToFormat = row.sourceFileName ?? ''; 
+        valueToFormat = row.sourceFileName ?? '';
       } else if (key === 'vatCredit') {
         valueToFormat = typeof row.vatCredit === 'boolean' ? row.vatCredit : false;
       } else {
-        valueToFormat = row[key]; 
+        valueToFormat = row[key];
       }
       return formatCsvCell(valueToFormat);
     }).join(',');
@@ -172,6 +173,7 @@ export const exportToCsv = (filename: string, rows: InvoiceItem[]): void => {
 
   const mimeType = 'text/csv;charset=utf-8';
 
+  // Prioritize pywebview bridge if available (typically for native dialogs via Python)
   if (window.pywebview && window.pywebview.api && typeof window.pywebview.api.save_file === 'function') {
     console.log(`pywebview environment detected. Attempting to download via Python bridge: ${filename}`);
     window.pywebview.api.save_file(filename, csvContent, mimeType)
@@ -183,16 +185,19 @@ export const exportToCsv = (filename: string, rows: InvoiceItem[]): void => {
           const pythonError = result?.error || 'Unknown error from Python side.';
           console.error(`Python save_file reported an issue: ${pythonError}`);
           alert(`Could not save file via Python: ${pythonError}. Attempting fallback download with dialog.`);
+          // Fallback to web-based dialogs if Python side fails
           attemptSaveWithDialogs(filename, csvContent, mimeType);
         }
       })
       .catch((error: any) => {
         console.error("Error calling pywebview.api.save_file bridge:", error);
         alert("Error communicating with Python for file download. The pywebview bridge might not be set up correctly. Attempting fallback download with dialog.");
+        // Fallback to web-based dialogs if bridge communication fails
         attemptSaveWithDialogs(filename, csvContent, mimeType);
       });
   } else {
-    console.log("Not in pywebview or save_file API not found. Using fallback download with dialog strategy.");
+    // If not in pywebview or specific API not found, use web-based dialog strategy
+    console.log("Not in pywebview or save_file API not found. Using fallback download with dialog strategy (File System Access API or legacy).");
     attemptSaveWithDialogs(filename, csvContent, mimeType);
   }
 };
