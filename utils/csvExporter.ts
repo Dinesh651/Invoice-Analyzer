@@ -1,3 +1,4 @@
+
 import { InvoiceItem } from '../types';
 
 // Helper function to convert any value to a string suitable for CSV cell
@@ -66,7 +67,7 @@ export const exportToCsv = (filename: string, rows: InvoiceItem[]): void => {
     csvContent += line + '\r\n';
   }
 
-  const mimeType = 'text/csv;charset=utf-8'; // Removed trailing semicolon
+  const mimeType = 'text/csv;charset=utf-8';
 
   // Check if running in pywebview and if the API bridge exists
   // @ts-ignore - pywebview is injected by the Python host
@@ -80,15 +81,16 @@ export const exportToCsv = (filename: string, rows: InvoiceItem[]): void => {
           // You could add a UI notification here if desired
           // alert(`File saved successfully: ${result.path || filename}`);
         } else {
-          console.error(`Python save_file reported an issue: ${result?.error || 'Unknown error'}`);
-          alert(`Could not save file via Python: ${result?.error || 'Ensure the Python backend is configured for downloads.'}`);
+          const pythonError = result?.error || 'Unknown error from Python side.';
+          console.error(`Python save_file reported an issue: ${pythonError}`);
+          alert(`Could not save file via Python: ${pythonError}. Attempting fallback browser download.`);
+          triggerStandardBrowserDownload(filename, csvContent, mimeType); // Fallback added here
         }
       })
       .catch((error: any) => {
-        console.error("Error calling pywebview.api.save_file:", error);
-        alert("Error communicating with Python for file download. The pywebview bridge might not be set up correctly. Falling back to browser download if possible.");
-        // Fallback to standard browser download on catastrophic bridge failure
-        triggerStandardBrowserDownload(filename, csvContent, mimeType);
+        console.error("Error calling pywebview.api.save_file bridge:", error);
+        alert("Error communicating with Python for file download. The pywebview bridge might not be set up correctly. Attempting fallback browser download.");
+        triggerStandardBrowserDownload(filename, csvContent, mimeType); // Existing fallback
       });
   } else {
     // Standard browser download logic
