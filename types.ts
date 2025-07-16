@@ -19,5 +19,5 @@ export interface ParsedInvoice {
 }
 
 export enum GeminiModel {
-    GEMINI_FLASH = "gemini-2.5-flash-preview-04-17",
+    GEMINI_FLASH = "gemini-2.5-flash",
 }
